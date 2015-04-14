@@ -2,11 +2,16 @@
 Exporting lead activities via Marketo REST API
 
 mktoExportActivities.py: Extracting Leads Activities via Marketo REST API
+
+
 Usage: mktoExportActivities.py <options>
 
 Options:
+
   -h                                this help
+
   -i --instance <instance>          Marketo Instance URL such as https://app-abj.marketo.com
+
   -o --output <filename>	    Output filename
   -d --id <client id>               Marketo LaunchPoint Client Id: eg. 3d96eaef-f611-42a0-967f-00aeeee7e0ea
   -s --secret <client secret>       Marketo LaunchPoint Client Secret: eg. i8s6RRq1LhPlMyATEKfLWl1255bwzrF
