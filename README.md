@@ -1,6 +1,7 @@
 # MarketoExportActivities
 Exporting lead activities via Marketo REST API
 
+# Usage
 Usage: mktoExportActivities.py <options>
 
 Options:
@@ -20,7 +21,9 @@ Options:
 Example:  
 `python mktoExportActivities.py -i https://012-RYY-345.mktorest.com -d 4e430960-xxxx-43c6-bbbb-c763a2f22dcd -s 0Sprrsdfis68h1fVY4xohgAq3xAPK19P -c 2015-04-09 -f "Behavior Score, Demographic Score" -m -w`  
 
-Mail bug reports and suggestion to : Yukio Y <unknot304@gmail.com>  
-
+# Reference
 Please refer Market REST API documents: http://docs.marketo.com  
 Search article with "Create a Custom Service for Use with ReST API"  
+
+# License
+This source is licensed under an MIT License, see the LICENSE file for full details. If you use this code, it would be great to hear from you.
