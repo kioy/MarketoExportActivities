@@ -1,8 +1,8 @@
-# -*- coding:utf-8 -*-
 #!/usr/bin/env python
+# -*- coding:utf-8 -*-
 """
-mktoExportActivities.py invoke Marketo REST API with Python script  
-Usage: mktoExportActivities.py -i <Marketo Instance URL> -o <output> -h
+mktoExportActivities.py: Extracting Leads Activities via Marketo REST API
+Usage: mktoExportActivities.py <options>
 
 Options:
   -h                                this help
@@ -13,11 +13,14 @@ Options:
   -c --since <date>                 Since Date time for calling Get Paging Token: eg. 2015-01-31
   -g --debug                        Pring debugging information
   -j --not-use-jst                  Change TimeZone for Activity Date field. Default is JST.
-  -f --change-data-field <fields>   Specify comma separated API fields name such as leadScore for extracting Data Value Changed activities. default: "leadScore,lifecycleStatus"
+  -f --change-data-field <fields>   Specify comma separated 'UI' fields name such as 'Behavior Score' for extracting from 'Data Value Changed' activities. default fields: 'Lead Score, Lifecycle Status'
   -w --add-webvisit-activity        Adding Web Visit activity. It might be a cause of slowdown.
   -m --add-mail-activity            Adding mail open/click activity. It might be a cause of slowdown.
     
 Mail bug reports and suggestion to : Yukio Y <unknot304 AT gmail.com>
+
+Please refer Market REST API documents: http://docs.marketo.com
+Search article with "Create a Custom Service for Use with ReST API"
 """
 
 import sys, os, errno  
@@ -26,7 +29,6 @@ import csv
 import getpass    
 
 import time
-import datetime
 import json
 import httplib2
 import logging
@@ -56,12 +58,14 @@ class MarketoClient:
                                 'Content-Type': 'application/json; charset=UTF-8'
                                 }
         self.http_client = httplib2.Http()
+        self.debug = False
 
         # send request
         response, content = self.http_client.request(self.access_token_url, 'GET', '', self.request_headers)
         data = json.loads(content)
         self.access_token = data ['access_token']
         # print >> sys.stderr, "Access Token: " + self.access_token
+        print >> sys.stderr, "Access Token Expired in", data ['expires_in']
 
 
     # get lead by id
@@ -124,16 +128,15 @@ class MarketoClient:
         data = json.loads(content)
         self.access_token = data ['access_token']
         # print >> sys.stderr, self.access_token
+        print >> sys.stderr, "Access Token Expired in", data ['expires_in']
         # timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d %H:%M:%S')
 
     def enableDebug(self):
         httplib2.debuglevel = 1
-
- 
+        self.debug = True
 
 if __name__ == "__main__": 
-    desc = u'{0} [Options]\nDetailed options -h or --help'.format(__file__)
-    parser = argparse.ArgumentParser(description=desc)
+    parser = argparse.ArgumentParser(description='Extract Lead Activities via Marketo API')
     parser.add_argument(
         '-i', '--instance',
         type = str,
@@ -190,15 +193,7 @@ if __name__ == "__main__":
         type = str,
         dest = 'change_data_fields',
         required = False,
-        help = 'Specify comma separated API fields name such as leadScore for extracting Data Value Changed activities. default: leadScore,lifecycleStatus'
-	)
-    parser.add_argument(
-        '-w', '--add-webvisit-activity',
-        action = 'store_true',
-        dest = 'web_activity',
-        default = False,
-        required = False,
-        help = 'Adding Web Visit activity. It might be a cause of slowdown.'
+        help = 'Specify comma separated "UI" fields name such as "Behavior Score" for extracting from "Data Value Changed" activities. default fields: "Lead Score, Lifecycle Status"'
 	)
     parser.add_argument(
         '-m', '--add-mail-activity',
@@ -207,6 +202,14 @@ if __name__ == "__main__":
         default = False,
         required = False,
         help = 'Adding mail open/click activity. It might be a cause of slowdown.'
+	)
+    parser.add_argument(
+        '-w', '--add-webvisit-activity',
+        action = 'store_true',
+        dest = 'web_activity',
+        default = False,
+        required = False,
+        help = 'Adding Web Visit activity. It might be a cause of slowdown.'
 	)
     
     args = parser.parse_args()
@@ -229,17 +232,23 @@ if __name__ == "__main__":
     default_activity_id = "12,13"
 
     # preparing csv headers according to command arguments. if user set -w option, we add "page" and "link"
-    default_header = ["id", "activityDate", "activityTypeId", "activityTypeName", "leadId", "leadScore", "lifecycleStatus"]
+    default_header = ["Activity Id", "Activity Date", "Activity Type Id", "Activity Type Name", "Lead Id"]
+
+    tracking_fields = ["Lead Score", "Lifecycle Status"]
+    default_header.extend(tracking_fields)
+
     if args.change_data_fields:
-        tracking_fields = args.change_data_fields.split(",")
-        default_header.extend(tracking_fields)
+        change_data_fields =  args.change_data_fields.split(",")
+        for field in change_data_fields:
+            tracking_fields.append(field)
+            default_header.append(field)
 
     if args.mail_activity:
-        deafult_header.extend(["mail","linkInMail"])
+        default_header.extend(["Mail","Link in Mail"])
         default_activity_id = default_activity_id + ",10,11"
 
     if args.web_activity:
-        default_header.extend(["page","link"])
+        default_header.extend(["Web Page","Link on Page"])
         default_activity_id = default_activity_id + ",1,3"
 
     # write header to fh
@@ -247,11 +256,9 @@ if __name__ == "__main__":
 
 
     # initiate dictionalies for storing latest leadStatus, lifecycleStatus and specified fields through command argument for each leads
-    last_leadScore = {}
-    last_lifecycleStatus = {}
     last_custom_fields = {}
     for field in tracking_fields:
-        last_custom_fields[field].append({})
+        last_custom_fields[field] = {}
 
     
     #
@@ -264,14 +271,31 @@ if __name__ == "__main__":
     moreResult=True
     while moreResult:
         raw_data = mktoClient.getLeadActivitiesRaw(token, default_activity_id)
+        success = raw_data ['success']
+        if success == False:
+            errors = raw_data ['errors']
+            error_code = errors [0] ['code']
+            error_message = errors[0] ['message']
+            if error_code == "602":
+                print >> sys.stderr, "Access Token has been expired."
+                mktoClient.updateAccessToken()
+                continue
+            else:
+                print >> sys.stderr, "Error:"
+                print >> sys.stderr, "REST API Error Code: ", error_code
+                print >> sys.stderr, "Message: ", error_message
+                sys.exit(1)
+
+        token = raw_data ['nextPageToken']
         moreResult = raw_data ['moreResult']
+
         # print >> sys.stderr, "Activity: " + json.dumps(raw_data, indent=4)
         # parse result section
         raw_data_result = raw_data ['result']
-        csv_raw = list()
         for result in raw_data_result:
+            csv_row = []
             # id
-            csv_raw.append(result ['id'])
+            csv_row.append(result ['id'])
 
             # activityDate
             # convert datetime (CST) to JST
@@ -290,7 +314,7 @@ if __name__ == "__main__":
             csv_row.append(activityTypeId)
 
             # activityTypeName
-            csv_row.append(activityTypeNameDict[activity_type_id])
+            csv_row.append(activityTypeNameDict[activityTypeId])
             
             # leadId
             leadId = result ['leadId']
@@ -298,24 +322,42 @@ if __name__ == "__main__":
 
             # 12:Created
             # leadScore, lifecycleStatus and other custom fields is empty, because of lead is just created.
+            #
+            # JSON results example:
+            # 
+            # {
+            #   "id": 303290,
+            #   "leadId": 101093,
+            #   "activityDate": "2015-04-09T05:34:40Z",
+            #   "activityTypeId": 12,
+            #   "primaryAttributeValueId": 101093,
+            #   "attributes": [
+            #     {
+            #       "name": "Created Date",
+            #       "value": "2015-04-09"
+            #     },
+            #     {
+            #       "name": "Form Name",
+            #       "value": "YY_Program.YY_Form"
+            #     },
+            #     {
+            #       "name": "Source Type",
+            #       "value": "Web form fillout"
+            #     }
+            #   ]
+            # }
             if  activityTypeId == 12:
-                # leadScore
-                csv_row.append(0)
-                # lifecycleStatus
-                csv_row.append("")
-                # store the latest leadScore and lifecycleStatus for this lead
-                last_leadScore [leadId] = 0
-                last_lifecycleStatus [leadId] = ""
-
                 for field in tracking_fields:
                     csv_row.append("")
-                    # is this correct? YY
+                    # is this correct... Lead Score should be integer but it will be initialized as ""
                     last_custom_fields [field][leadId] = ""
 
+                # adding empty field value for mail related column
                 if args.mail_activity:
                     csv_row.append("")
                     csv_row.append("")
 
+                # adding empty field value for web related column
                 if args.web_activity:
                     csv_row.append("")
                     csv_row.append("")
@@ -325,29 +367,277 @@ if __name__ == "__main__":
                 continue
 
             # 
-            # 13: Data Value Changed
-            # leadScore, lifecycleStatus and other custom fields is updated!
+            # 13: Change Data Value
+            # Lead Score, Lifecycle Status and other standard/custom fields are updated!
+            #
+            # JSON results example:
+            # {
+            #  "id": 303306,
+            #  "leadId": 101093,
+            #  "activityDate": "2015-04-09T09:51:00Z",
+            #  "activityTypeId": 13,
+            #  "primaryAttributeValueId": 641,
+            #  "primaryAttributeValue": "YY_Field_1",
+            #  "attributes": [
+            #   {
+            #     "name": "New Value",
+            #     "value": "marketo"
+            #   },
+            #   {
+            #     "name": "Old Value",
+            #     "value": "coverity"
+            #   },
+            #   {
+            #     "name": "Reason",
+            #     "value": "Form fill-out, URL: http://yy.marketo.com/lp/yy.html"
+            #   },
+            #   {
+            #     "name": "Source",
+            #     "value": "Web form fillout"
+            #   }
+            #  ]
+            # }
             if  activityTypeId == 13:
-                fields = result ['fields']
-                for field in fields:
-                    if field ['name'] == "leadScore":
-                        leadScore = int(unicode(field['newValue']).encode('utf-8'))
-                        csv_row.append(leadScore)
-                        csv_row.append(lastLifecycleStatus.get(leadId))
-                        lastLeadScore[leadId] = leadScore
-                    elif field ['name'] == "lifecycleStatus":
-                        leadLifecycleStatus = unicode(field['newValue']).encode('utf-8')
-                        csv_row.append(lastLeadScore.get(leadId))
-                        csv_row.append(leadLifecycleStatus)
-                        lastLifecycleStatus[leadId] = leadLifecycleStatus
-                    else:
-                        csv_row.append(lastLeadScore.get(leadId))
-                        csv_row.append(lastLifecycleStatus.get(leadId))
+                activity_field = unicode(result ['primaryAttributeValue']).encode('utf-8')
+                if activity_field in tracking_fields:
+                    for field in tracking_fields:
+                        if field == activity_field:
+                            attributes = result ['attributes']
+                            for attribute in attributes:
+                                if attribute ['name'] == "New Value":
+                                    value = unicode(attribute ['value']).encode('utf-8')
+                                    csv_row.append(value)
+                                    # store current value
+                                    last_custom_fields [field][leadId] = value
+                                    break
+                        else:
+                            # if it is not matched, adding latest value or empty
+                            csv_row.append(last_custom_fields [field].get(leadId))
+                else:
+                    # this activity is not related to tracking_fields, so we skip this activity without writerow
+                    continue
 
+                # adding empty field value for mail related column
+                if args.mail_activity:
+                    csv_row.append("")
+                    csv_row.append("")
 
+                # adding empty field value for web related column
+                if args.web_activity:
+                    csv_row.append("")
+                    csv_row.append("")
 
-            # write row into csv 
-            mywriter.writerow(csv_row)
+                # write row into csv 
+                mywriter.writerow(csv_row)
+                continue
+
+            # 
+            # 10: Open Mail
+            # JSON results example:
+            # {
+            #  "id": 303306,
+            #  "leadId": 101093,
+            #  "activityDate": "2015-04-09T09:51:00Z",
+            #  "activityTypeId": 10,
+            #  "primaryAttributeValueId": 5,
+            #  "primaryAttributeValue": "RestAPITester.01_Mail",
+            #  "attributes": [
+            #   {
+            #     "name": "Device",
+            #     "value": "unknown"
+            #   },
+            #   {
+            #     "name": "Is Mobile Device",
+            #     "value": false
+            #   },
+            #   {
+            #     "name": "Platform",
+            #     "value": "unknown"
+            #   },
+            #   {
+            #     "name": "User Agent",
+            #     "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.18 (KHTML, like Gecko)"
+            #   }
+            #  ]
+            # }
+            if  activityTypeId == 10:
+                for field in tracking_fields:
+                    csv_row.append(last_custom_fields [field].get(leadId))
+
+                # Mail
+                mail =  unicode(result ['primaryAttributeValue']).encode('utf-8')
+                csv_row.append(mail)
+                # Click in Mail
+                csv_row.append("")
+
+                # adding empty field value for web related column
+                if args.web_activity:
+                    csv_row.append("")
+                    csv_row.append("")
+
+                # write row into csv 
+                mywriter.writerow(csv_row)
+                continue
+                
+            # 
+            # 11: Click in Mail
+            # JSON results example:
+            # {
+            #  "id": 303306,
+            #  "leadId": 101093,
+            #  "activityDate": "2015-04-09T09:51:00Z",
+            #  "activityTypeId": 10,
+            #  "primaryAttributeValueId": 5,
+            #  "primaryAttributeValue": "RestAPITester.01_Mail",
+            #  "attributes": [
+            #   {
+            #     "name": "Device",
+            #     "value": "unknown"
+            #   },
+            #   {
+            #     "name": "Is Mobile Device",
+            #     "value": false
+            #   },
+            #   {
+            #     "name": "Link",
+            #     "value": "http://unknot304.blogspot.jp/2015/02/munchkin-tag.html"
+            #   },
+            #   {
+            #     "name": "Platform",
+            #     "value": "unknown"
+            #   },
+            #   {
+            #     "name": "User Agent",
+            #     "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.18 (KHTML, like Gecko)"
+            #   }
+            #  ]
+            # }
+            if  activityTypeId == 11:
+                for field in tracking_fields:
+                    csv_row.append(last_custom_fields [field].get(leadId))
+
+                # Mail
+                mail =  unicode(result ['primaryAttributeValue']).encode('utf-8')
+                csv_row.append(mail)
+
+                attributes = result ['attributes']
+                # Click in Mail
+                for attribute in attributes:
+                    if attribute ['name'] == "Link":
+                        value = unicode(attribute ['value']).encode('utf-8')
+                        csv_row.append(value)
+                        break
+
+                # adding empty field value for web related column
+                if args.web_activity:
+                    csv_row.append("")
+                    csv_row.append("")
+
+                # write row into csv 
+                mywriter.writerow(csv_row)
+                continue
+                
+            # 
+            # 1: Web Visit
+            # JSON results example:
+            # {
+            #  "id": 303306,
+            #  "leadId": 101093,
+            #  "activityDate": "2015-04-09T09:51:00Z",
+            #  "activityTypeId": 10,
+            #  "primaryAttributeValueId": 14,
+            #  "primaryAttributeValue": "unknot304.jp/",
+            #  "attributes": [
+            #   {
+            #     "name": "Client IP Address",
+            #     "value": "202.212.192.233"
+            #   },
+            #   {
+            #     "name": "Query Parameters",
+            #     "value": ""
+            #   },
+            #   {
+            #     "name": "Referrer URL",
+            #     "value": ""
+            #   },
+            #   {
+            #     "name": "User Agent",
+            #     "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.18 (KHTML, like Gecko)"
+            #   }
+            #  ]
+            # }
+            if  activityTypeId == 1:
+                for field in tracking_fields:
+                    csv_row.append(last_custom_fields [field].get(leadId))
+
+                # adding empty field value for mail related column
+                if args.mail_activity:
+                    csv_row.append("")
+                    csv_row.append("")
+
+                if args.web_activity:
+                    # Web
+                    web =  unicode(result ['primaryAttributeValue']).encode('utf-8')
+                    csv_row.append(web)
+                    # Link on Web
+                    csv_row.append("")
+
+                # write row into csv 
+                mywriter.writerow(csv_row)
+                continue
+                
+            # 
+            # 3: Click on Web
+            # JSON results example:
+            # {
+            #  "id": 303306,
+            #  "leadId": 101093,
+            #  "activityDate": "2015-04-09T09:51:00Z",
+            #  "activityTypeId": 10,
+            #  "primaryAttributeValueId": 10,
+            #  "primaryAttributeValue": "na-ab09.marketo.com/lp/user/01_PDF__DL.html",
+            #  "attributes": [
+            #   {
+            #     "name": "Client IP Address",
+            #     "value": "202.212.192.233"
+            #   },
+            #   {
+            #     "name": "Query Parameters",
+            #     "value": ""
+            #   },
+            #   {
+            #     "name": "Referrer URL",
+            #     "value": ""
+            #   },
+            #   {
+            #     "name": "User Agent",
+            #     "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.18 (KHTML, like Gecko)"
+            #   }
+            #   {
+            #     "name": "Webpage ID",
+            #     "value": 7
+            #   }
+            #  ]
+            # }
+            if  activityTypeId == 3:
+                for field in tracking_fields:
+                    csv_row.append(last_custom_fields [field].get(leadId))
+
+                # adding empty field value for mail related column
+                if args.mail_activity:
+                    csv_row.append("")
+                    csv_row.append("")
+
+                if args.web_activity:
+                    # Web
+                    csv_row.append("")
+                    # Link on Web
+                    link =  unicode(result ['primaryAttributeValue']).encode('utf-8')
+                    csv_row.append(link)
+
+                # write row into csv 
+                mywriter.writerow(csv_row)
+                continue
 
     if fh is not sys.stdout:
         fh.close()
