@@ -21,9 +21,25 @@ Options:
 Example:  
 `python mktoExportActivities.py -i https://012-RYY-345.mktorest.com -d 4e430960-xxxx-43c6-bbbb-c763a2f22dcd -s 0Sprrsdfis68h1fVY4xohgAq3xAPK19P -c 2015-04-09 -f "Behavior Score, Demographic Score" -m -w`  
 
+# Required
+
+httplib2  
+
+you can install httplib2 as follows,  
+1. Install pip if you don’t have it.  
+1.1 download https://bootstrap.pypa.io/get-pip.py  
+1.2 invoke command in console  
+     `sudo python get-pip.py`  
+
+2. install httplib2 if you don’t have it.  
+2.1 invoke command in console  
+     `sudo pip install httplib2`  
+
+
 # Reference
 Please refer Market REST API documents: http://docs.marketo.com  
 Search article with "Create a Custom Service for Use with ReST API"  
+
 
 # License
 This source is licensed under an MIT License, see the LICENSE file for full details. If you use this code, it would be great to hear from you.
