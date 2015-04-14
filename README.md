@@ -26,13 +26,13 @@ Example:
 httplib2  
 
 you can install httplib2 as follows,  
-1. Install pip if you don’t have it.  
-1.1 download https://bootstrap.pypa.io/get-pip.py  
-1.2 invoke command in console  
+-Install pip if you don’t have it.  
+-download https://bootstrap.pypa.io/get-pip.py  
+-invoke command in console  
      `sudo python get-pip.py`  
 
-2. install httplib2 if you don’t have it.  
-2.1 invoke command in console  
+-install httplib2 if you don’t have it.  
+-invoke command in console  
      `sudo pip install httplib2`  
 
 
