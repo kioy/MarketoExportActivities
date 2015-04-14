@@ -5,12 +5,21 @@ mktoExportActivities.py invoke Marketo REST API with Python script
 Usage: mktoExportActivities.py -i <Marketo Instance URL> -o <output> -h
 
 Options:
-  -i --instance <instance>      Marketo Instance URL such as https://app-abj.marketo.com
-  -o --output <filename>		Output filename
-  -h                            this help
-
+  -h                                this help
+  -i --instance <instance>          Marketo Instance URL such as https://app-abj.marketo.com
+  -o --output <filename>	    Output filename
+  -d --id <client id>               Marketo LaunchPoint Client Id: eg. 3d96eaef-f611-42a0-967f-00aeeee7e0ea
+  -s --secret <client secret>       Marketo LaunchPoint Client Secret: eg. i8s6RRq1LhPlMyATEKfLWl1255bwzrF
+  -c --since <date>                 Since Date time for calling Get Paging Token: eg. 2015-01-31
+  -g --debug                        Pring debugging information
+  -j --not-use-jst                  Change TimeZone for Activity Date field. Default is JST.
+  -f --change-data-field <fields>   Specify comma separated API fields name such as leadScore for extracting Data Value Changed activities. default: "leadScore,lifecycleStatus"
+  -w --add-webvisit-activity        Adding Web Visit activity. It might be a cause of slowdown.
+  -m --add-mail-activity            Adding mail open/click activity. It might be a cause of slowdown.
+    
 Mail bug reports and suggestion to : Yukio Y <unknot304 AT gmail.com>
 """
+
 import sys, os, errno  
 import argparse
 import csv
@@ -185,11 +194,19 @@ if __name__ == "__main__":
 	)
     parser.add_argument(
         '-w', '--add-webvisit-activity',
-        action = 'store_true'
-        dest = 'webvisit',
+        action = 'store_true',
+        dest = 'web_activity',
         default = False,
         required = False,
         help = 'Adding Web Visit activity. It might be a cause of slowdown.'
+	)
+    parser.add_argument(
+        '-m', '--add-mail-activity',
+        action = 'store_true',
+        dest = 'mail_activity',
+        default = False,
+        required = False,
+        help = 'Adding mail open/click activity. It might be a cause of slowdown.'
 	)
     
     args = parser.parse_args()
@@ -198,62 +215,65 @@ if __name__ == "__main__":
     if args.debug:
         mktoClient.enableDebug()
 
-    # file handler
+    # initiate file handler, selecting file output or stdout according to command arguments
     if args.output_file:
         fh = open(args.output_file, 'w')
     else:
         fh = sys.stdout
     mywriter = csv.writer(fh, delimiter = ',')
 
+
+    # prepairing activityTypeName
+    # Currently, this script supports the following activityType for extracting activity.
+    activityTypeNameDict = {1:'Visit Webpage', 3:'Click Link', 10:'Open Email', 11:'Click Email', 12:'New Lead', 13:'Change Data Value'}
+    default_activity_id = "12,13"
+
+    # preparing csv headers according to command arguments. if user set -w option, we add "page" and "link"
+    default_header = ["id", "activityDate", "activityTypeId", "activityTypeName", "leadId", "leadScore", "lifecycleStatus"]
+    if args.change_data_fields:
+        tracking_fields = args.change_data_fields.split(",")
+        default_header.extend(tracking_fields)
+
+    if args.mail_activity:
+        deafult_header.extend(["mail","linkInMail"])
+        default_activity_id = default_activity_id + ",10,11"
+
+    if args.web_activity:
+        default_header.extend(["page","link"])
+        default_activity_id = default_activity_id + ",1,3"
+
+    # write header to fh
+    mywriter.writerow(default_header)
+
+
+    # initiate dictionalies for storing latest leadStatus, lifecycleStatus and specified fields through command argument for each leads
+    last_leadScore = {}
+    last_lifecycleStatus = {}
+    last_custom_fields = {}
+    for field in tracking_fields:
+        last_custom_fields[field].append({})
+
     
+    #
     # initiate Marketo ReST API
     mktoClient = MarketoClient(args.mkto_instance, 'client_credentials', args.mkto_client_id, args.mkto_client_secret)
     
-
-    # get web visits, click link activities
-    # token = mktoClient.getPagingToken(args.mkto_date)
-    # moreResult=True
-    # while moreResult:
-    #     raw_data = mktoClient.getLeadActivitiesRaw(token, '10,11,12,13')
-    #     moreResult = raw_data ['moreResult']
-    #     # parse result section
-    #     raw_data_result = raw_data ['result']
-    #     csv_raw = list()
-    #     for result in raw_data_result:
-    #         csv_raw.append(result ['id'])
-    #         csv_raw.append(result ['activityTypeId'])
-    #         csv_raw.append(result ['leadId'])
-    #         csv_raw.append(result ['activityDate'])
-    #     print >> sys.stderr, "Activity: " + json.dumps(raw_data, indent=4)
-
-
-    # write csv headers
-    default_header = ["activityDate", "leadId", "id", "activityType", "Mail", "linkInMail"]
-    if args.change_data_fields:
-        tracking_fields = args.change_data_fields.split(",")
-        tracking_fields = change_fields.extend([leadScore, lifecycleStatus])
-        default_header.extend(tracking_fields)
-    mywriter.writerow(default_header)
-
-    # dictionaly for the leadStatus and lifecycleStatus for each leads
-    lastLeadScore = {}
-    lastLifecycleStatus = {}
-    
-
 
     # get value change activities
     token = mktoClient.getPagingToken(args.mkto_date)
     moreResult=True
     while moreResult:
-        raw_data = mktoClient.getLeadChangesRaw(token,"leadScore,lifecycleStatus")
+        raw_data = mktoClient.getLeadActivitiesRaw(token, default_activity_id)
         moreResult = raw_data ['moreResult']
         # print >> sys.stderr, "Activity: " + json.dumps(raw_data, indent=4)
-
         # parse result section
         raw_data_result = raw_data ['result']
+        csv_raw = list()
         for result in raw_data_result:
-            csv_row = []
+            # id
+            csv_raw.append(result ['id'])
 
+            # activityDate
             # convert datetime (CST) to JST
             activityDate = unicode(result ['activityDate']).encode('utf-8')
             activityDate = activityDate.replace("T", " ")
@@ -263,43 +283,68 @@ if __name__ == "__main__":
                 jstActivityDate = pytz.utc.localize(jstActivityDate)
                 jstActivityDate = jstActivityDate.astimezone(pytz.timezone('Asia/Tokyo'))
                 activityDate = jstActivityDate.strftime('%Y-%m-%d %H:%M:%S')
-
             csv_row.append(activityDate)
 
+            # activityTypeId
+            activityTypeId = result ['activityTypeId']
+            csv_row.append(activityTypeId)
+
+            # activityTypeName
+            csv_row.append(activityTypeNameDict[activity_type_id])
+            
+            # leadId
             leadId = result ['leadId']
             csv_row.append(leadId)
-            csv_row.append(result ['id'])
 
-            # if this activity explains "Created", leadScore and lifecycleStatus is empty
-            if  result ['activityTypeId'] == 12:
-                csv_row.append("Created")
+            # 12:Created
+            # leadScore, lifecycleStatus and other custom fields is empty, because of lead is just created.
+            if  activityTypeId == 12:
+                # leadScore
                 csv_row.append(0)
+                # lifecycleStatus
                 csv_row.append("")
                 # store the latest leadScore and lifecycleStatus for this lead
-                lastLeadScore [leadId] = 0
-                lastLifecycleStatus [leadId] = ""
+                last_leadScore [leadId] = 0
+                last_lifecycleStatus [leadId] = ""
+
+                for field in tracking_fields:
+                    csv_row.append("")
+                    # is this correct? YY
+                    last_custom_fields [field][leadId] = ""
+
+                if args.mail_activity:
+                    csv_row.append("")
+                    csv_row.append("")
+
+                if args.web_activity:
+                    csv_row.append("")
+                    csv_row.append("")
+
                 # write row into csv 
                 mywriter.writerow(csv_row)
                 continue
 
-            # if this activity explains "Data Value Cahnged", added leadScore and lifecycleStatus 
-            
-            fields = result ['fields']
-            csv_row.append("Data Value Changed")
-            for field in fields:
-                if field ['name'] == "leadScore":
-                    leadScore = int(unicode(field['newValue']).encode('utf-8'))
-                    csv_row.append(leadScore)
-                    csv_row.append(lastLifecycleStatus.get(leadId))
-                    lastLeadScore[leadId] = leadScore
-                elif field ['name'] == "lifecycleStatus":
-                    leadLifecycleStatus = unicode(field['newValue']).encode('utf-8')
-                    csv_row.append(lastLeadScore.get(leadId))
-                    csv_row.append(leadLifecycleStatus)
-                    lastLifecycleStatus[leadId] = leadLifecycleStatus
-                else:
-                    csv_row.append(lastLeadScore.get(leadId))
-                    csv_row.append(lastLifecycleStatus.get(leadId))
+            # 
+            # 13: Data Value Changed
+            # leadScore, lifecycleStatus and other custom fields is updated!
+            if  activityTypeId == 13:
+                fields = result ['fields']
+                for field in fields:
+                    if field ['name'] == "leadScore":
+                        leadScore = int(unicode(field['newValue']).encode('utf-8'))
+                        csv_row.append(leadScore)
+                        csv_row.append(lastLifecycleStatus.get(leadId))
+                        lastLeadScore[leadId] = leadScore
+                    elif field ['name'] == "lifecycleStatus":
+                        leadLifecycleStatus = unicode(field['newValue']).encode('utf-8')
+                        csv_row.append(lastLeadScore.get(leadId))
+                        csv_row.append(leadLifecycleStatus)
+                        lastLifecycleStatus[leadId] = leadLifecycleStatus
+                    else:
+                        csv_row.append(lastLeadScore.get(leadId))
+                        csv_row.append(lastLifecycleStatus.get(leadId))
+
+
 
             # write row into csv 
             mywriter.writerow(csv_row)
