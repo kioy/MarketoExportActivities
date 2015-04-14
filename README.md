@@ -18,7 +18,7 @@ Options:
   -m/--add-mail-activity            :Adding mail open/click activity. It might be a cause of slowdown.  
     
 Example:  
-python mktoExportActivities.py -i https://012-RYY-345.mktorest.com -d 4e430960-xxxx-43c6-bbbb-c763a2f22dcd -s 0Sprrsdfis68h1fVY4xohgAq3xAPK19P -c 2015-04-09 -f "Behavior Score, Demographic Score" -m -w  
+`python mktoExportActivities.py -i https://012-RYY-345.mktorest.com -d 4e430960-xxxx-43c6-bbbb-c763a2f22dcd -s 0Sprrsdfis68h1fVY4xohgAq3xAPK19P -c 2015-04-09 -f "Behavior Score, Demographic Score" -m -w`  
 
 Mail bug reports and suggestion to : Yukio Y <unknot304 AT gmail.com>  
 
