@@ -642,11 +642,12 @@ if __name__ == "__main__":
     if fh is not sys.stdout:
         fh.close()
 
-    # test methods
+    # testing methods
     # mktoClient.updateAccessToken()
     # mktoClient.getLeadRaw("101099", "email")
     # mktoClient.getLeadsRaw("id", "101095", "id")
     # raw_data = mktoClient.getActivityTypesRaw()
     # print >> sys.stderr, "Activity Types: " + json.dumps(raw_data, indent=4)
+
 
 
