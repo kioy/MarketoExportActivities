@@ -174,14 +174,26 @@ if __name__ == "__main__":
         dest = 'not_jst',
         default = False,
         required = False,
-        help = 'Pring debugging information'
+        help = 'Change TimeZone for Activity Date field. Default is JST.'
+	)
+    parser.add_argument(
+        '-f', '--change-data-fields',
+        type = str,
+        dest = 'change_data_fields',
+        required = False,
+        help = 'Specify comma separated API fields name such as leadScore for extracting Data Value Changed activities. default: leadScore,lifecycleStatus'
+	)
+    parser.add_argument(
+        '-w', '--add-webvisit-activity',
+        action = 'store_true'
+        dest = 'webvisit',
+        default = False,
+        required = False,
+        help = 'Adding Web Visit activity. It might be a cause of slowdown.'
 	)
     
     args = parser.parse_args()
-    
-    # initiate Marketo ReST API
-    mktoClient = MarketoClient(args.mkto_instance, 'client_credentials', args.mkto_client_id, args.mkto_client_secret)
-    
+
     # enable debug information
     if args.debug:
         mktoClient.enableDebug()
@@ -191,9 +203,12 @@ if __name__ == "__main__":
         fh = open(args.output_file, 'w')
     else:
         fh = sys.stdout
-
     mywriter = csv.writer(fh, delimiter = ',')
 
+    
+    # initiate Marketo ReST API
+    mktoClient = MarketoClient(args.mkto_instance, 'client_credentials', args.mkto_client_id, args.mkto_client_secret)
+    
 
     # get web visits, click link activities
     # token = mktoClient.getPagingToken(args.mkto_date)
@@ -212,12 +227,19 @@ if __name__ == "__main__":
     #     print >> sys.stderr, "Activity: " + json.dumps(raw_data, indent=4)
 
 
-
-    mywriter.writerow(["activityDate", "leadId", "id", "activityType", "leadScore", "lifecycleStatus"])
+    # write csv headers
+    default_header = ["activityDate", "leadId", "id", "activityType", "Mail", "linkInMail"]
+    if args.change_data_fields:
+        tracking_fields = args.change_data_fields.split(",")
+        tracking_fields = change_fields.extend([leadScore, lifecycleStatus])
+        default_header.extend(tracking_fields)
+    mywriter.writerow(default_header)
 
     # dictionaly for the leadStatus and lifecycleStatus for each leads
     lastLeadScore = {}
     lastLifecycleStatus = {}
+    
+
 
     # get value change activities
     token = mktoClient.getPagingToken(args.mkto_date)
