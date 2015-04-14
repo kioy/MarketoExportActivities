@@ -2,7 +2,7 @@
 Exporting lead activities via Marketo REST API
 
 # Usage
-'Usage: mktoExportActivities.py [options]
+`Usage: mktoExportActivities.py [options]
 
 Options:
 
