@@ -13,7 +13,7 @@ Options:
   -c --since <date>                 Since Date time for calling Get Paging Token: eg. 2015-01-31
   -g --debug                        Pring debugging information
   -j --not-use-jst                  Change TimeZone for Activity Date field. Default is JST.
-  -f --change-data-field <fields>   Specify comma separated 'UI' fields name such as 'Behavior Score' for extracting from 'Data Value Changed' activities. default fields: 'Lead Score, Lifecycle Status'
+  -f --change-data-field <fields>   Specify comma separated 'UI' fields name such as 'Behavior Score' for extracting from 'Data Value Changed' activities. default fields: 'Lead Score'
   -w --add-webvisit-activity        Adding Web Visit activity. It might be a cause of slowdown.
   -m --add-mail-activity            Adding mail open/click activity. It might be a cause of slowdown.
     
@@ -65,7 +65,7 @@ class MarketoClient:
         data = json.loads(content)
         self.access_token = data ['access_token']
         # print >> sys.stderr, "Access Token: " + self.access_token
-        print >> sys.stderr, "Access Token Expired in", data ['expires_in']
+        # print >> sys.stderr, "Access Token Expired in", data ['expires_in']
 
 
     # get lead by id
@@ -193,7 +193,7 @@ if __name__ == "__main__":
         type = str,
         dest = 'change_data_fields',
         required = False,
-        help = 'Specify comma separated "UI" fields name such as "Behavior Score" for extracting from "Data Value Changed" activities. default fields: "Lead Score, Lifecycle Status"'
+        help = 'Specify comma separated "UI" fields name such as "Behavior Score" for extracting from "Data Value Changed" activities. default fields: "Lead Score"'
 	)
     parser.add_argument(
         '-m', '--add-mail-activity',
@@ -214,10 +214,6 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    # enable debug information
-    if args.debug:
-        mktoClient.enableDebug()
-
     # initiate file handler, selecting file output or stdout according to command arguments
     if args.output_file:
         fh = open(args.output_file, 'w')
@@ -234,7 +230,7 @@ if __name__ == "__main__":
     # preparing csv headers according to command arguments. if user set -w option, we add "page" and "link"
     default_header = ["Activity Id", "Activity Date", "Activity Type Id", "Activity Type Name", "Lead Id"]
 
-    tracking_fields = ["Lead Score", "Lifecycle Status"]
+    tracking_fields = ["Lead Score"]
     default_header.extend(tracking_fields)
 
     if args.change_data_fields:
@@ -265,32 +261,50 @@ if __name__ == "__main__":
     # initiate Marketo ReST API
     mktoClient = MarketoClient(args.mkto_instance, 'client_credentials', args.mkto_client_id, args.mkto_client_secret)
     
+    # enable debug information
+    if args.debug:
+        mktoClient.enableDebug()
+
 
     # get value change activities
     token = mktoClient.getPagingToken(args.mkto_date)
     moreResult=True
     while moreResult:
         raw_data = mktoClient.getLeadActivitiesRaw(token, default_activity_id)
+        if args.debug:
+            print >> sys.stderr, "Activity: " + json.dumps(raw_data, indent=4)
         success = raw_data ['success']
         if success == False:
             errors = raw_data ['errors']
             error_code = errors [0] ['code']
             error_message = errors[0] ['message']
             if error_code == "602":
-                print >> sys.stderr, "Access Token has been expired."
+                if args.debug:
+                    print >> sys.stderr, "Access Token has been expired. Now updating..."
                 mktoClient.updateAccessToken()
                 continue
             else:
                 print >> sys.stderr, "Error:"
                 print >> sys.stderr, "REST API Error Code: ", error_code
                 print >> sys.stderr, "Message: ", error_message
+                if fh is not sys.stdout:
+                    fh.close()
                 sys.exit(1)
 
         token = raw_data ['nextPageToken']
         moreResult = raw_data ['moreResult']
 
-        # print >> sys.stderr, "Activity: " + json.dumps(raw_data, indent=4)
-        # parse result section
+        if args.debug:
+            print >> sys.stderr, "Activity: " + json.dumps(raw_data, indent=4)
+
+        #check if there is result field
+        if raw_data.has_key('result') == False:
+                print >> sys.stderr, "Error:"
+                print >> sys.stderr, "There is no specific activities."
+                if fh is not sys.stdout:
+                    fh.close()
+                sys.exit(1)
+
         raw_data_result = raw_data ['result']
         for result in raw_data_result:
             csv_row = []
@@ -368,7 +382,7 @@ if __name__ == "__main__":
 
             # 
             # 13: Change Data Value
-            # Lead Score, Lifecycle Status and other standard/custom fields are updated!
+            # Lead Score and other standard/custom fields are updated!
             #
             # JSON results example:
             # {

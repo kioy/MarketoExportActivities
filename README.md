@@ -14,7 +14,7 @@ Options:
   `-c/--since <date>                 :Since Date time for calling Get Paging Token: eg. 2015-01-31`  
   `-g/--debug                        :Pring debugging information`  
   `-j/--not-use-jst                  :Change TimeZone for Activity Date field. Default is JST.`  
-  `-f/--change-data-field <fields>   :Specify comma separated 'UI' fields name such as 'Behavior Score' for extracting from 'Data Value Changed' activities. default fields: 'Lead Score, Lifecycle Status'`  
+  `-f/--change-data-field <fields>   :Specify comma separated 'UI' fields name such as 'Behavior Score' for extracting from 'Data Value Changed' activities. default fields: 'Lead Score'`  
   `-w/--add-webvisit-activity        :Adding Web Visit activity. It might be a cause of slowdown.`  
   `-m/--add-mail-activity            :Adding mail open/click activity. It might be a cause of slowdown.`  
     
