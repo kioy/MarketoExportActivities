@@ -22,7 +22,7 @@ Example:
 `python mktoExportActivities.py -i https://012-RYY-345.mktorest.com -d 4e430960-xxxx-43c6-bbbb-c763a2f22dcd -s 0Sprrsdfis68h1fVY4xohgAq3xAPK19P -c 2015-04-09 -f "Behavior Score, Demographic Score" -m -w`  
 
 # Required
-
+Python2.7
 httplib2  
 
 you can install httplib2 as follows,  
