@@ -244,7 +244,7 @@ if __name__ == "__main__":
         default_activity_id = default_activity_id + ",10,11"
 
     if args.web_activity:
-        default_header.extend(["Web Page","Link on Page"])
+        default_header.extend(["Web Page","Link on Page","Query Parameters"])
         default_activity_id = default_activity_id + ",1,3"
 
     # write header to fh
@@ -595,6 +595,13 @@ if __name__ == "__main__":
                     csv_row.append(web)
                     # Link on Web
                     csv_row.append("")
+                    # Query Parameter
+                    web_attributes = result ['attributes']
+                    for web_attribute in web_attributes:
+                        if web_attribute ['name'] == "Query Parameters":
+                            qparam = unicode(web_attribute ['value']).encode('utf-8')
+                            csv_row.append(qparam)
+                            break
 
                 # write row into csv 
                 mywriter.writerow(csv_row)
@@ -648,6 +655,13 @@ if __name__ == "__main__":
                     # Link on Web
                     link =  unicode(result ['primaryAttributeValue']).encode('utf-8')
                     csv_row.append(link)
+                    # Query Parameter
+                    web_attributes = result ['attributes']
+                    for web_attribute in web_attributes:
+                        if web_attribute ['name'] == "Query Parameters":
+                            qparam = unicode(web_attribute ['value']).encode('utf-8')
+                            csv_row.append(qparam)
+                            break
 
                 # write row into csv 
                 mywriter.writerow(csv_row)
