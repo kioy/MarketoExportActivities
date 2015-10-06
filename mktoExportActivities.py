@@ -283,6 +283,11 @@ if __name__ == "__main__":
                     print >> sys.stderr, "Access Token has been expired. Now updating..."
                 mktoClient.updateAccessToken()
                 continue
+            elif error_code == "606":
+                if args.debug:
+                    print >> sys.stderr, "Max rate limit '100' exceeded with in '20' secs..."
+		time.sleep(2.0)
+		continue
             else:
                 print >> sys.stderr, "Error:"
                 print >> sys.stderr, "REST API Error Code: ", error_code
