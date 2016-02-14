@@ -11,6 +11,7 @@ Options:
   -d --id <client id>               Marketo LaunchPoint Client Id: eg. 3d96eaef-f611-42a0-967f-00aeeee7e0ea
   -s --secret <client secret>       Marketo LaunchPoint Client Secret: eg. i8s6RRq1LhPlMyATEKfLWl1255bwzrF
   -c --since <date>                 Since Date time for calling Get Paging Token: eg. 2015-01-31
+  -l --listid                       ListId to filter leads (You can find the ID from URL like #ST443A1, 443 is list id)
   -g --debug                        Pring debugging information
   -j --not-use-jst                  Change TimeZone for Activity Date field. Default is JST.
   -f --change-data-field <fields>   Specify comma separated 'UI' fields name such as 'Behavior Score' for extracting from 'Data Value Changed' activities. default fields: 'Lead Score'
@@ -49,7 +50,7 @@ from datetime import datetime
 #    client_secret: eg. i8s6RRq1LhPlMyATEKfLW2300CMbwzrF
 #
 class MarketoClient:
-    def __init__(self, mkto_instance, grant_type, client_id, client_secret):
+    def __init__(self, mkto_instance, grant_type, client_id, client_secret, list_id):
         self.identity_url = mkto_instance + '/identity'
         self.endpoint_url = mkto_instance
         self.access_token_url = self.identity_url + '/oauth/token?grant_type=' + grant_type + '&client_id=' + client_id + '&client_secret=' + client_secret
@@ -59,6 +60,7 @@ class MarketoClient:
                                 }
         self.http_client = httplib2.Http()
         self.debug = False
+        self.list_id = list_id
 
         # send request
         response, content = self.http_client.request(self.access_token_url, 'GET', '', self.request_headers)
@@ -110,6 +112,8 @@ class MarketoClient:
         leads_url = self.endpoint_url + '/rest/v1/activities.json?access_token=' + self.access_token
         #leads_url = leads_url + '&nextPageToken=' + token + '&activityTypeIds=1&activityTypeIds=11&activityTypeIds=3'
         leads_url = leads_url + '&nextPageToken=' + token + '&activityTypeIds=' + activity_type_ids
+        if self.list_id:
+            leads_url = leads_url + '&listId=' + self.list_id
         response, content = self.http_client.request(leads_url, 'GET', '', self.request_headers)
         data = json.loads(content)
         # print >> sys.stderr, data
@@ -157,6 +161,13 @@ if __name__ == "__main__":
         dest = 'mkto_client_secret',
         required = True,
         help = 'Marketo LaunchPoint Client Secret: eg. i8s6RRq1LhPlMyATEKfLWl1255bwzrF'
+	)
+    parser.add_argument(
+        '-l', '--listid',
+        type = str,
+        dest = 'mkto_list_id',
+        required = False,
+        help = 'List Id: eg. 443 (please extract it from URL on Marketo)'
 	)
     parser.add_argument(
         '-o', '--output',
@@ -259,7 +270,7 @@ if __name__ == "__main__":
     
     #
     # initiate Marketo ReST API
-    mktoClient = MarketoClient(args.mkto_instance, 'client_credentials', args.mkto_client_id, args.mkto_client_secret)
+    mktoClient = MarketoClient(args.mkto_instance, 'client_credentials', args.mkto_client_id, args.mkto_client_secret, args.mkto_list_id)
     
     # enable debug information
     if args.debug:
