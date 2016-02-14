@@ -13,6 +13,7 @@ Options:
   `-s/--secret <client secret>       :Marketo LaunchPoint Client Secret: eg. i8s6RRq1LhPlMyATEKfLWl1255bwzrF`  
   `-c/--since <date>                 :Since Date time for calling Get Paging Token: eg. 2015-01-31`  
   `-l/--listid <list id>             :ListId to filter leads (You can find the ID from URL like ST443A1, 443 is list id)`
+
   `-g/--debug                        :Pring debugging information`  
   `-j/--not-use-jst                  :Change TimeZone for Activity Date field. Default is JST.`  
   `-f/--change-data-field <fields>   :Specify comma separated 'UI' fields name such as 'Behavior Score' for extracting from 'Data Value Changed' activities. default fields: 'Lead Score'`  
