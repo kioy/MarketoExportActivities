@@ -321,6 +321,10 @@ if __name__ == "__main__":
                     fh.close()
                 sys.exit(1)
 
+        #check empty results
+        if raw_data.has_key('result') == False:
+            continue
+
         raw_data_result = raw_data ['result']
         for result in raw_data_result:
             csv_row = []
