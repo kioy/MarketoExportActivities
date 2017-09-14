@@ -314,7 +314,7 @@ if __name__ == "__main__":
             print >> sys.stderr, "Activity: " + json.dumps(raw_data, indent=4)
 
         #check if there is result field
-        if raw_data.has_key('result') == False:
+        if raw_data.has_key('result') == False and moreResult != True:
                 print >> sys.stderr, "Error:"
                 print >> sys.stderr, "There is no specific activities."
                 if fh is not sys.stdout:
